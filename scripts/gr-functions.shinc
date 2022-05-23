@@ -1,0 +1,180 @@
+#!/bin/bash
+
+##### Set up locally
+
+AWSCMD="aws"      # command to invoke the AWS-CLI
+#AWSCMD="docker container run --rm --group-add root --user $(id -u):$(id -g) -v $HOME/.aws:/.aws  --entrypoint aws viya4-iac-aws"
+
+
+
+##### Defaults
+
+ALL_REGIONS="eu-north-1 ap-south-1 eu-west-3 eu-west-2 eu-west-1 ap-northeast-3 ap-northeast-2 ap-northeast-1 sa-east-1 ca-central-1 ap-southeast-1 ap-southeast-2 eu-central-1 us-east-1 us-east-2 us-west-1 us-west-2 global"
+LOC="us-east-1"               # AWS region to work in
+PROJECT="sasviya4aws"         # from hands-on instructions
+MAX_AGE=`expr 12 \* 60 \* 60` # 12 hours (in seconds)
+
+# Function: Check for valid AWS auth tokens
+# ------------------------------------------------------------------
+# Usage: valid_aws_token [ level ] 
+# Returns: 0 (true) for valid token, else 1 (false)
+
+valid_aws_token () {
+
+    # Try to get the identity
+    you=`$AWSCMD sts get-caller-identity --query Arn --output text 2>&1`
+    retc=$?
+    if [ "$retc" != "0" ]
+    then
+        grprint 9 "'aws sts get-caller-identity' returned:"
+        grprint ERR "$you"
+        grprint 9 "ERROR: Unable to confirm authentication to AWS (rc=$retc).\n"
+        false
+    else
+        # Don't say anything
+        true
+    fi
+}
+
+
+# Function: Messaging 
+# ------------------------------------------------------------------
+# Prints the message with formatting
+# Usage: grprint [ level ] [ "Message text" ]
+#
+grprint () {
+
+    level=$1        # message level
+    msg=$2          # message body
+
+    case ${level} in
+        ERR) 
+            prefix="\n---"
+            suffix="\n---\n"
+        ;;
+
+        0)
+            prefix="\n---\n"
+            suffix="\n---"
+        ;;
+
+        1)
+            prefix="\n>>> "
+            suffix="\n"        
+        ;;
+
+        2)
+            prefix=" >> "
+            suffix=""        
+        ;;
+
+        3)
+            prefix="  > "
+            suffix=""        
+        ;;
+
+        4)
+            prefix="    "
+            suffix=""        
+        ;;
+
+        *)
+            prefix=""
+            suffix=""        
+        ;;
+    esac
+
+    echo -e "${prefix}${msg}${suffix}"
+
+}
+
+# Function: Determine if owner has active EKS cluster 
+# ------------------------------------------------------------------
+# Check if owner has active EIP or Instances (indicating active EKS)
+#
+# Usage  : active_eks_cluster <user's PREFIX used for resourceowner tag>
+# Returns: 0 (true) if active EIP or Instances found, else 1 (false)
+#
+active_eks_owner () {
+
+    this_owner=$1       # is there an active EKS (or soon to be one) for this resource owner?
+
+    # Quick check if there are any Elastic IP for this user (one of the first items IaC provisions)
+    eip_id=`$AWSCMD ec2 describe-addresses  --filters Name=tag:resourceowner,Values=$this_owner --query Addresses[].[PublicIp] --output text`
+    retc=$?
+
+    # Verifying rc here - but not in deeper
+    if [ "$retc" != "0" ]
+    then
+        grprint 0 "ERROR: Unable to use AWS CLI (rc=$retc)"
+        exit
+    fi
+
+    if [ "$eip_id" != "" ]
+    then
+        true     # TRUE, found elastic-ip, assuming (soon-to-be) active EKS cluster 
+    else
+
+        # Another quick check for any running instances (in case the EKS cluster isn't running yet)
+        inst_ids=`$AWSCMD ec2 describe-instances  --filters "Name=tag:resourceowner,Values=$this_owner" 'Name=instance-state-name,Values=!terminated' | grep InstanceId | awk -F\" {'print $4'}`
+
+        if [ "$inst_ids" != "" ]
+        then
+            true     # TRUE, found instance, assuming (soon-to-be) active EKS cluster
+        else
+            false    # FALSE, no Instance or EIP
+
+# To check directly for EKS - but it's slow.
+# ------------
+#            # Triple-check to ensure there aren't any EKS for this VPC owner 
+#            # build array to list active EKS clusters
+#            mapfile -t eksarray < <($AWSCMD eks list-clusters --region $LOC --output text)
+#            eksitems=${#eksarray[@]}          # no. of items in array
+#            eksidlist=""
+#            for (( e=0; e<${eksitems}; e++ )); 
+#            do 
+#                #echo "${eksarray[$e]}"                       # show cluster info
+#                eksidlist+=`echo "${eksarray[$e]}" | awk {'print $2'} `
+#                eksidlist+=" "
+#            done
+#
+#            # make a list of any EKS cluster owners
+#            activeowners=""
+#            if [[ $eksitems -gt 0 ]]
+#            then
+#                for e in $eksidlist
+#                do
+#                    # pull the owner's name from the EKS cluster description
+#                    activeowners+=`$AWSCMD eks describe-cluster --name ${e} --region $LOC --query 'cluster.tags.resourceowner' --output text`
+#                    activeowners+=" "
+#                done
+#            else
+#                activeowners="zerozipzilchnada"
+#            fi
+#
+#            # Is this VPC owner in the list of active EKS cluster owners?
+#            if [[ " ${activeowners} " =~ " ${this_owner} " ]]
+#            then
+#                true       # TRUE, this_owner has an active EKS cluster
+#            else
+#                false      # FALSE, no EKS - and no Instance or EIP
+#            fi
+# ------------
+
+        fi
+
+    fi
+}
+
+
+# Function: Elapsed Time
+# ------------------------------------------------------------------
+# Returns the elasped amount of time formatted as hh:mm:ss
+# Usage: elapsedtime [ number of seconds elapsed ]
+#
+elapsedtime () {
+
+    sec=$1        # number of elapsed seconds
+    eval "echo -e Elapsed time: $(date -ud "@$sec" +'%H:%M:%S')"
+
+}

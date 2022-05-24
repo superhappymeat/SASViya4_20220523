@@ -40,9 +40,11 @@ We will use the [viya4-deployment project](https://github.com/sassoftware/viya4-
    # allows the viya4-deployment repo to run with different file owner
    git config --global --add safe.directory /viya4-deployment
    # creates file /home/cloud-user/.gitconfig
+    # creates file /root/.gitconfig
 
    # copy it into the container files, too
-   cp /home/cloud-user/.gitconfig /home/cloud-user/viya4-deployment
+   #cp /home/cloud-user/.gitconfig /home/cloud-user/viya4-deployment
+    cp /root/.gitconfig /root/viya4-deployment
    # that's the top-level dir *inside* the container
    ```
 

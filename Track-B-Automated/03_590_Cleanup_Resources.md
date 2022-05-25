@@ -16,9 +16,9 @@ We've been using some environment variables and command aliases in other exercis
   # as cloud-user on your Linux host in RACE
 
   # Aliases for utilities run inside viya4-iac-aws Docker container
-  alias aws="docker container run --rm --group-add root --user $(id -u):$(id -g) -v $HOME/.aws:/.aws --entrypoint aws viya4-iac-aws"
+  alias aws="docker container run --rm --group-add root --user $(id -u):$(id -g) -v $HOME/.aws:/root/.aws --entrypoint aws viya4-iac-aws"
 
-  alias terraform="docker container run --rm --group-add root --user $(id -u):$(id -g) -v $HOME/.aws:/.aws -v $HOME/.ssh:/.ssh -v $HOME/viya4-iac-aws:/workspace --entrypoint terraform viya4-iac-aws"
+  alias terraform="docker container run --rm --group-add root --user $(id -u):$(id -g) -v $HOME/.aws:/root/.aws -v $HOME/.ssh:/root/.ssh -v $HOME/viya4-iac-aws:/workspace --entrypoint terraform viya4-iac-aws"
 
   alias viya4-deployment="docker container run -it --group-add root --user $(id -u):$(id -g) -v $HOME/project/deploy:/data -v $HOME/.kube/config:/config/kubeconfig -v $HOME/project/deploy/${NS}/${NS}-viyavars.yaml:/config/config -v $HOME/viya4-iac-aws/${NS}.tfstate:/config/tfstate viya4-deployment"
 
